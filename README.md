@@ -114,7 +114,7 @@ Copy `.env.example` to `.env` and configure:
 
 ---
 
-## 🚀 Running Locally
+##  Running Locally
 
 ### 1. Installation
 Ensure Python 3.9+ is installed. Create a virtual environment and install packages:
@@ -148,7 +148,7 @@ python -m pytest
 
 ---
 
-## ✉️ Sample API Requests & Responses
+##  Sample API Requests & Responses
 
 ### POST `/chat`
 
