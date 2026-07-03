@@ -1,0 +1,6 @@
+{system_prompt}
+
+Intent: {intent}
+Recommendations: {recommendations}
+
+Explain politely to the hiring team that no suitable SHL assessments match the current requirements, and offer to help if they can share more details.

@@ -1,0 +1,7 @@
+{system_prompt}
+
+Intent: {intent}
+Recommendations:
+{recommendations}
+
+Summarize the best matches for the hiring requirements and explain the main reasons they fit.

@@ -1,0 +1,9 @@
+{system_prompt}
+
+Intent: {intent}
+Recommendations:
+{recommendations}
+Comparison Details:
+{comparison_result}
+
+Summarize the comparison of these recommended assessments, highlighting the key differences to help the hiring team make a decision.
