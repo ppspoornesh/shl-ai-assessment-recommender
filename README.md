@@ -8,7 +8,7 @@ A high-performance, stateless FastAPI service designed to help recruitment and h
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 The recommendation pipeline follows a strict, sequential request-response architecture:
 
@@ -37,7 +37,7 @@ graph TD
 
 ---
 
-## 📁 Directory Structure
+##  Directory Structure
 
 ```text
 ├── app/
@@ -95,7 +95,7 @@ graph TD
 
 ---
 
-## ⚙️ Environment Variables
+##  Environment Variables
 
 Copy `.env.example` to `.env` and configure:
 
@@ -138,7 +138,7 @@ API Documentation will be available at `http://127.0.0.1:8000/docs`.
 
 ---
 
-## 🧪 Running Tests
+##  Running Tests
 
 We run tests using `pytest`. The test suite is optimized with lazy catalog loading to execute in under 1 second.
 
@@ -189,7 +189,7 @@ python -m pytest
 
 ---
 
-## ⚠️ Limitations & Future Improvements
+##  Limitations & Future Improvements
 
 1. **Role Modifier List Limits**: The extraction rule uses a local keyword-checking engine for skill modifiers (e.g. `java` in `Java Developer`). Integrating a Named Entity Recognition (NER) model would enable extracting arbitrary niche technologies.
 2. **Metadata Density**: Some catalog entries contain unstructured description texts. Performing a one-time pre-processing pass to structure all descriptions into key-value attributes would improve overall accuracy.
