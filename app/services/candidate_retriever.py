@@ -7,15 +7,44 @@ from app.models.requirements import HiringRequirements
 from app.services.catalog_loader import CatalogLoader
 
 
-class CandidateRetriever:
-    """Selects candidate assessments from the catalog for a given requirement set.
+TECH_FALLBACKS = {
+    "rust": {
+        "alternatives": ["Linux Programming (General)", "Smart Interview Live Coding", "C++ Programming (New)"],
+        "reason": "No direct Rust assessment exists in the SHL catalog. We recommend C++ Programming and Linux Programming as the closest alternatives for systems programming and Smart Interview Live Coding for general coding proficiency."
+    },
+    "go": {
+        "alternatives": ["Smart Interview Live Coding", "Linux Programming (General)"],
+        "reason": "No direct Go/Golang assessment exists in the SHL catalog. We recommend Smart Interview Live Coding to evaluate hands-on backend development and Linux Programming for backend systems proficiency."
+    },
+    "golang": {
+        "alternatives": ["Smart Interview Live Coding", "Linux Programming (General)"],
+        "reason": "No direct Go/Golang assessment exists in the SHL catalog. We recommend Smart Interview Live Coding to evaluate hands-on backend development and Linux Programming for backend systems proficiency."
+    },
+    "typescript": {
+        "alternatives": ["JavaScript (New)", "Smart Interview Live Coding"],
+        "reason": "No direct TypeScript assessment exists in the SHL catalog. We recommend the JavaScript assessment as the closest technology match and Smart Interview Live Coding for general coding proficiency."
+    },
+    "vue": {
+        "alternatives": ["ReactJS (New)", "Automata Front End", "JavaScript (New)"],
+        "reason": "No direct Vue.js assessment exists in the SHL catalog. We recommend ReactJS or Automata Front End as the closest modern frontend technology alternatives."
+    },
+    "vuejs": {
+        "alternatives": ["ReactJS (New)", "Automata Front End", "JavaScript (New)"],
+        "reason": "No direct Vue.js assessment exists in the SHL catalog. We recommend ReactJS or Automata Front End as the closest modern frontend technology alternatives."
+    },
+    "swift": {
+        "alternatives": ["Automata Front End", "Smart Interview Live Coding"],
+        "reason": "No direct Swift or iOS-specific assessment exists in the SHL catalog. We recommend Automata Front End and Smart Interview Live Coding to evaluate logic and UI coding proficiency."
+    },
+    "kotlin": {
+        "alternatives": ["Core Java (Advanced Level) (New)", "Android Development (New)"],
+        "reason": "No direct Kotlin assessment exists in the SHL catalog. We recommend Android Development and Core Java as the closest alternatives to evaluate mobile and object-oriented programming skills."
+    }
+}
 
-    The retriever is intentionally limited to retrieval and filtering. It does not rank,
-    score, or generate recommendations. It uses three lightweight signals in sequence:
-    1. metadata filtering based on explicit catalog fields,
-    2. fuzzy matching against entry names and descriptions,
-    3. keyword overlap against skills and role-related terms.
-    """
+
+class CandidateRetriever:
+    """Selects candidate assessments from the catalog for a given requirement set."""
 
     def __init__(self, catalog_loader: CatalogLoader | None = None) -> None:
         from app.services.catalog_loader import get_catalog_loader
@@ -29,6 +58,31 @@ class CandidateRetriever:
         for entry in self._catalog_loader.catalog:
             if self._matches_requirements(entry, requirements):
                 candidates.append(entry)
+
+        # 1. Check for fallback mappings
+        fallback_names = set()
+        for skill in requirements.technical_skills:
+            skill_lower = skill.lower()
+            if skill_lower in TECH_FALLBACKS:
+                fallback_names.update(TECH_FALLBACKS[skill_lower]["alternatives"])
+
+        # 2. Check if assessment battery is requested, inject standard components
+        if requirements.assessment_battery:
+            battery_standards = [
+                "Occupational Personality Questionnaire OPQ32r",
+                "SHL Verify Interactive G+",
+                "Verify - General Ability Screen",
+                "Verify - Deductive Reasoning",
+                "Verify - Inductive Reasoning (2014)"
+            ]
+            fallback_names.update(battery_standards)
+
+        # If we have fallback/battery names to fetch, retrieve them directly by exact name matching
+        if fallback_names:
+            existing_ids = {c.entity_id for c in candidates}
+            for entry in self._catalog_loader.catalog:
+                if entry.name in fallback_names and entry.entity_id not in existing_ids:
+                    candidates.append(entry)
 
         return candidates
 

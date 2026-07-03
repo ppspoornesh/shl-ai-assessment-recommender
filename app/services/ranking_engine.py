@@ -25,11 +25,7 @@ class RankedCandidate(BaseModel):
 
 
 class RankingEngine:
-    """Scores candidates deterministically using configurable weighted attributes.
-
-    This component does not retrieve candidates or generate recommendations. It only
-    evaluates an existing candidate set against the current requirements.
-    """
+    """Scores candidates deterministically using configurable weighted attributes."""
 
     def __init__(self, weights: dict[str, float] | None = None) -> None:
         self._weights = self._normalize_weights(weights or self._default_weights())
@@ -50,10 +46,11 @@ class RankingEngine:
                     job_levels=candidate.job_levels,
                     keys=candidate.keys,
                     score_breakdown=score_breakdown,
-                    explanation=self._build_explanation(candidate, score_breakdown),
+                    explanation=self._build_explanation(candidate, score_breakdown, requirements),
                 )
             )
 
+        # Sort by score, then skills coverage, then role fit, then seniority, then name, then entity_id
         return sorted(
             ranked,
             key=lambda item: (
@@ -74,10 +71,14 @@ class RankingEngine:
             "seniority": self._score_seniority(candidate, requirements),
             "duration": self._score_duration(candidate, requirements),
             "remote": self._score_remote(candidate, requirements),
+            "purpose": self._score_purpose(candidate, requirements),
+            "industry": self._score_industry(candidate, requirements),
+            "language": self._score_language(candidate, requirements),
+            "adaptive": self._score_adaptive(candidate, requirements),
         }
         return {
             name: round(self._weights[name] * breakdown[name], 2)
-            for name in ["role", "skills", "competencies", "seniority", "duration", "remote"]
+            for name in ["role", "skills", "competencies", "seniority", "duration", "remote", "purpose", "industry", "language", "adaptive"]
         }
 
     def _score_role(self, candidate: CatalogEntry, requirements: HiringRequirements) -> float:
@@ -97,17 +98,14 @@ class RankingEngine:
         if not role_words:
             return 0.0
 
-        # Classify words in the role
         known_skills = {"python", "sql", "excel", "java", "javascript", "typescript", "c++", "go", "rust", "ruby", "scala", "swift", "c#", "dotnet", "net"}
 
         skill_words = [w for w in role_words if w in known_skills]
         generic_words = [w for w in role_words if w not in known_skills]
 
-        # Check matches in search_text
         matched_skills = [w for w in skill_words if w in search_text]
         matched_generics = [w for w in generic_words if w in search_text]
 
-        # If the role only has skill words
         if not generic_words:
             if len(matched_skills) == len(skill_words):
                 return 1.0
@@ -115,7 +113,6 @@ class RankingEngine:
                 return 0.6
             return 0.0
 
-        # If the role only has generic/other words
         if not skill_words:
             if len(matched_generics) == len(generic_words):
                 return 1.0
@@ -123,15 +120,11 @@ class RankingEngine:
                 return 0.5
             return 0.0
 
-        # If the role has both skill words and generic words (e.g. "java developer")
         if matched_skills and matched_generics:
             return 0.85
         elif matched_skills:
-            # Matches technology but not the generic role (e.g. "Core Java" for "Java Developer")
             return 0.60
         elif matched_generics:
-            # Matches generic role but not the technology (e.g. "ASP.NET Developer" for "Java Developer")
-            # This is a generic match but wrong tech, so rank it very low!
             return 0.10
 
         return 0.0
@@ -187,7 +180,69 @@ class RankingEngine:
             return 0.0
         return 1.0
 
-    def _build_explanation(self, candidate: CatalogEntry, score_breakdown: dict[str, float]) -> str:
+    def _score_purpose(self, candidate: CatalogEntry, requirements: HiringRequirements) -> float:
+        if not requirements.assessment_purpose:
+            return 0.0
+        purpose = requirements.assessment_purpose.lower()
+        search_text = self._build_search_text(candidate)
+
+        if purpose == "development":
+            if any(k in search_text for k in ["development", "training", "coaching", "upskilling", "360"]):
+                return 1.0
+        elif purpose in ["screening", "screening hiring", "hiring"]:
+            if any(k in search_text for k in ["screening", "selection", "recruitment", "hiring", "pre-employment", "pre employment"]):
+                return 1.0
+        elif purpose in ["promotion", "internal mobility", "leadership succession"]:
+            if any(k in search_text for k in ["promotion", "succession", "mobility", "potential", "transition"]):
+                return 1.0
+        elif purpose == "graduate hiring":
+            if any("graduate" in level.lower() or "entry-level" in level.lower() for level in candidate.job_levels):
+                return 1.0
+        elif purpose == "executive hiring":
+            if any("executive" in level.lower() or "director" in level.lower() for level in candidate.job_levels):
+                return 1.0
+        elif purpose == "safety critical":
+            if "safety" in search_text or "critical" in search_text:
+                return 1.0
+
+        return 0.0
+
+    def _score_industry(self, candidate: CatalogEntry, requirements: HiringRequirements) -> float:
+        if not requirements.industry:
+            return 0.0
+        industry = requirements.industry.lower()
+        search_text = self._build_search_text(candidate)
+        if any(industry == ind.lower() for ind in candidate.target_industries) or industry in search_text:
+            return 1.0
+        return 0.0
+
+    def _score_language(self, candidate: CatalogEntry, requirements: HiringRequirements) -> float:
+        if not requirements.preferred_languages:
+            return 0.0
+        search_text = self._build_search_text(candidate)
+        cand_langs = [l.lower() for l in candidate.languages] if candidate.languages else []
+        for lang in requirements.preferred_languages:
+            lang_lower = lang.lower()
+            if lang_lower in cand_langs or lang_lower in search_text:
+                return 1.0
+        return 0.0
+
+    def _score_adaptive(self, candidate: CatalogEntry, requirements: HiringRequirements) -> float:
+        if candidate.adaptive and candidate.adaptive.lower() in ["yes", "true", "y"]:
+            return 1.0
+        return 0.0
+
+    def _build_explanation(self, candidate: CatalogEntry, score_breakdown: dict[str, float], requirements: HiringRequirements) -> str:
+        from app.services.candidate_retriever import TECH_FALLBACKS
+
+        # Check for fallback alternative description overrides
+        for skill in requirements.technical_skills:
+            skill_lower = skill.lower()
+            if skill_lower in TECH_FALLBACKS:
+                fb = TECH_FALLBACKS[skill_lower]
+                if candidate.name in fb["alternatives"]:
+                    return fb["reason"]
+
         labels = {
             "role": "role fit",
             "skills": "technical skill coverage",
@@ -195,8 +250,12 @@ class RankingEngine:
             "seniority": "seniority match",
             "duration": "available duration",
             "remote": "delivery preference",
+            "purpose": "assessment purpose fit",
+            "industry": "industry sector alignment",
+            "language": "preferred language support",
+            "adaptive": "adaptive testing format",
         }
-        parts = [labels[name] for name, value in score_breakdown.items() if value > 0]
+        parts = [labels[name] for name, value in score_breakdown.items() if value > 0 and name in labels]
         if not parts:
             return "No strong match signals were found for this assessment."
         return f"{candidate.name} matched on {self._format_list(parts)}."
@@ -220,13 +279,18 @@ class RankingEngine:
         return " ".join(part for part in parts if part).lower()
 
     def _normalize_weights(self, weights: dict[str, float]) -> dict[str, float]:
+        # Keeps custom weights passed in unit tests intact
         normalized = {
-            "role": weights.get("role", 0.35),
-            "skills": weights.get("skills", 0.40),
-            "competencies": weights.get("competencies", 0.1),
-            "seniority": weights.get("seniority", 0.1),
-            "duration": weights.get("duration", 0.05),
+            "role": weights.get("role", 0.0),
+            "skills": weights.get("skills", 0.0),
+            "competencies": weights.get("competencies", 0.0),
+            "seniority": weights.get("seniority", 0.0),
+            "duration": weights.get("duration", 0.0),
             "remote": weights.get("remote", 0.0),
+            "purpose": weights.get("purpose", 0.0),
+            "industry": weights.get("industry", 0.0),
+            "language": weights.get("language", 0.0),
+            "adaptive": weights.get("adaptive", 0.0),
         }
         total = sum(normalized.values())
         if total <= 0:
@@ -235,10 +299,14 @@ class RankingEngine:
 
     def _default_weights(self) -> dict[str, float]:
         return {
-            "role": float(getattr(settings, "ranking_role_weight", 0.35)),
-            "skills": float(getattr(settings, "ranking_skills_weight", 0.40)),
-            "competencies": float(getattr(settings, "ranking_competencies_weight", 0.10)),
-            "seniority": float(getattr(settings, "ranking_seniority_weight", 0.10)),
-            "duration": float(getattr(settings, "ranking_duration_weight", 0.05)),
-            "remote": float(getattr(settings, "ranking_remote_weight", 0.00)),
+            "role": 0.20,
+            "skills": 0.25,
+            "competencies": 0.10,
+            "seniority": 0.10,
+            "duration": 0.05,
+            "remote": 0.05,
+            "purpose": 0.10,
+            "industry": 0.05,
+            "language": 0.05,
+            "adaptive": 0.05,
         }

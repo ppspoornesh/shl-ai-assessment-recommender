@@ -13,6 +13,12 @@ from app.services.extraction_rules import (
     RoleExtractionRule,
     SeniorityExtractionRule,
     SkillExtractionRule,
+    DepartmentExtractionRule,
+    SoftSkillsExtractionRule,
+    CertificationsExtractionRule,
+    LanguageAccentLocationExtractionRule,
+    AssessmentPurposeExtractionRule,
+    RemoteOnsiteHybridExtractionRule,
 )
 
 
@@ -29,6 +35,12 @@ class RequirementExtractor:
             PersonalityExtractionRule(),
             IndustryExtractionRule(),
             RemoteExtractionRule(),
+            DepartmentExtractionRule(),
+            SoftSkillsExtractionRule(),
+            CertificationsExtractionRule(),
+            LanguageAccentLocationExtractionRule(),
+            AssessmentPurposeExtractionRule(),
+            RemoteOnsiteHybridExtractionRule(),
         ]
 
     def parse_conversation(self, conversation: Iterable[Message]) -> ExtractionResult:
@@ -64,17 +76,32 @@ class RequirementExtractor:
         entities.extend(requirements.technical_skills)
         entities.extend(requirements.competencies)
         entities.extend(requirements.personality_traits)
+        entities.extend(requirements.soft_skills)
+        entities.extend(requirements.certifications)
         if requirements.role:
             entities.append(requirements.role)
         if requirements.industry:
             entities.append(requirements.industry)
+        if requirements.department:
+            entities.append(requirements.department)
+        if requirements.accent:
+            entities.append(requirements.accent)
+        if requirements.location:
+            entities.append(requirements.location)
+        if requirements.assessment_purpose:
+            entities.append(requirements.assessment_purpose)
         return [entity for entity in entities if entity]
 
     def _collect_missing_fields(self, requirements: HiringRequirements) -> list[str]:
+        # Define fields that are important to track for missing info
         missing: list[str] = []
-        for field in ["role", "seniority", "years_of_experience", "technical_skills", "competencies", "industry"]:
+        for field in ["role", "seniority", "technical_skills", "preferred_languages", "accent", "assessment_purpose"]:
             value = getattr(requirements, field)
-            if not value:
+            # For lists, check if empty
+            if isinstance(value, list):
+                if not value:
+                    missing.append(field)
+            elif value is None:
                 missing.append(field)
         return missing
 
@@ -85,11 +112,15 @@ class RequirementExtractor:
         if requirements.seniority:
             score += 0.15
         if requirements.years_of_experience is not None:
-            score += 0.15
+            score += 0.1
         if requirements.technical_skills:
             score += 0.15
         if requirements.competencies:
             score += 0.1
         if requirements.industry:
-            score += 0.15
+            score += 0.1
+        if requirements.soft_skills:
+            score += 0.05
+        if requirements.assessment_purpose:
+            score += 0.05
         return round(min(score, 1.0), 2) if missing_fields else round(min(score + 0.1, 1.0), 2)

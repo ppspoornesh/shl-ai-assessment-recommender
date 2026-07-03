@@ -50,6 +50,9 @@ class RoleExtractionRule(ExtractionRule):
             "product manager",
             "software engineer",
             "data analyst",
+            "call center agent",
+            "customer service representative",
+            "sales representative",
             "engineer",
             "analyst",
             "manager",
@@ -59,6 +62,15 @@ class RoleExtractionRule(ExtractionRule):
             "architect",
             "scientist",
             "consultant",
+            "agent",
+            "representative",
+            "sales",
+            "support",
+            "specialist",
+            "assistant",
+            "associate",
+            "nurse",
+            "worker",
         ]
         for role in known_roles:
             if role in text_lower:
@@ -206,4 +218,128 @@ class RemoteExtractionRule(ExtractionRule):
             return requirements.model_copy(update={"remote": False})
         if "hybrid" in text_lower:
             return requirements.model_copy(update={"remote": True})
+        return requirements
+
+
+class DepartmentExtractionRule(ExtractionRule):
+    def apply(self, text: str, requirements: HiringRequirements) -> HiringRequirements:
+        text_lower = text.lower()
+        departments = [
+            "sales", "finance", "engineering", "healthcare", "call center", "customer support",
+            "customer service", "administration", "human resources", "hr", "marketing", "operations", "ops"
+        ]
+        for dept in departments:
+            if re.search(rf"\b{re.escape(dept)}\b", text_lower):
+                return requirements.model_copy(update={"department": dept})
+        return requirements
+
+
+class SoftSkillsExtractionRule(ExtractionRule):
+    def apply(self, text: str, requirements: HiringRequirements) -> HiringRequirements:
+        text_lower = text.lower()
+        skills = [
+            "communication", "empathy", "teamwork", "collaboration", "active listening", "problem solving",
+            "negotiation", "creativity", "adaptability", "critical thinking", "patience", "conflict resolution",
+            "presentation", "interpersonal", "leadership", "time management"
+        ]
+        found = [skill for skill in skills if skill in text_lower]
+        if not found:
+            return requirements
+        updated = list(requirements.soft_skills)
+        for skill in found:
+            if skill not in updated:
+                updated.append(skill)
+        return requirements.model_copy(update={"soft_skills": updated})
+
+
+class CertificationsExtractionRule(ExtractionRule):
+    def apply(self, text: str, requirements: HiringRequirements) -> HiringRequirements:
+        text_lower = text.lower()
+        certs = ["pmp", "aws", "certified", "certification", "certifications", "ccna", "prince2", "scrum master", "cpa", "cfa", "safe"]
+        found = [cert for cert in certs if cert in text_lower]
+        if not found:
+            return requirements
+        updated = list(requirements.certifications)
+        for cert in found:
+            if cert not in updated:
+                updated.append(cert)
+        return requirements.model_copy(update={"certifications": updated})
+
+
+class LanguageAccentLocationExtractionRule(ExtractionRule):
+    def apply(self, text: str, requirements: HiringRequirements) -> HiringRequirements:
+        text_lower = text.lower()
+        
+        # Languages
+        languages = ["english", "spanish", "french", "german", "mandarin", "japanese", "italian", "portuguese", "hindi"]
+        found_langs = [lang for lang in languages if re.search(rf"\b{re.escape(lang)}\b", text_lower)]
+        updated_langs = list(requirements.preferred_languages)
+        for lang in found_langs:
+            if lang not in updated_langs:
+                updated_langs.append(lang)
+        requirements = requirements.model_copy(update={"preferred_languages": updated_langs})
+
+        # Accent
+        accents = {
+            "us": "us", "uk": "uk", "british": "uk", "american": "us", "indian": "indian",
+            "australian": "australian", "neutral": "neutral"
+        }
+        for kw, accent in accents.items():
+            if re.search(rf"\b{re.escape(kw)}\s*accent\b", text_lower) or re.search(rf"\baccent\s*{re.escape(kw)}\b", text_lower):
+                requirements = requirements.model_copy(update={"accent": accent})
+                break
+
+        # Location
+        locations = ["new york", "london", "san francisco", "tokyo", "paris", "berlin", "chicago", "boston"]
+        for loc in locations:
+            if re.search(rf"\b{re.escape(loc)}\b", text_lower):
+                requirements = requirements.model_copy(update={"location": loc})
+                break
+        return requirements
+
+
+class AssessmentPurposeExtractionRule(ExtractionRule):
+    def apply(self, text: str, requirements: HiringRequirements) -> HiringRequirements:
+        text_lower = text.lower()
+        
+        purposes = {
+            "screening": ["screening", "hiring", "recruitment", "selection", "pre-employment", "pre employment", "new hire"],
+            "promotion": ["promotion", "promote", "promotions", "career path", "career transition"],
+            "development": ["development", "training", "grow", "coaching", "upskilling", "performance"],
+            "internal mobility": ["internal mobility", "mobility", "transfer", "internal hire", "internal transfer"],
+            "leadership succession": ["succession", "succession planning", "leadership pipeline", "leadership succession"],
+            "graduate hiring": ["graduate", "graduates", "campus", "entry level", "entry-level", "graduate hiring"],
+            "executive hiring": ["executive", "executives", "c-level", "director", "executive hiring"],
+            "safety critical": ["safety critical", "safety-critical", "hazardous", "safety"]
+        }
+        
+        for purpose, keywords in purposes.items():
+            if any(re.search(rf"\b{re.escape(kw)}\b", text_lower) for kw in keywords):
+                requirements = requirements.model_copy(update={"assessment_purpose": purpose})
+                break
+        return requirements
+
+
+class RemoteOnsiteHybridExtractionRule(ExtractionRule):
+    def apply(self, text: str, requirements: HiringRequirements) -> HiringRequirements:
+        text_lower = text.lower()
+        updates = {}
+        if "hybrid" in text_lower:
+            updates["hybrid"] = True
+            updates["remote"] = True
+            updates["onsite"] = False
+        elif "onsite" in text_lower or "on-site" in text_lower:
+            updates["onsite"] = True
+            updates["remote"] = False
+            updates["hybrid"] = False
+        elif "remote" in text_lower:
+            updates["remote"] = True
+            updates["hybrid"] = False
+            updates["onsite"] = False
+
+        if "battery" in text_lower or "batteries" in text_lower or "technical + personality" in text_lower:
+            updates["assessment_battery"] = True
+
+        if updates:
+            return requirements.model_copy(update=updates)
         return requirements

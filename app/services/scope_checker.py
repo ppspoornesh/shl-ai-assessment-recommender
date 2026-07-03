@@ -45,6 +45,10 @@ class ScopeChecker:
             "excel",
             "java",
             "javascript",
+            "hello",
+            "hi",
+            "hey",
+            "greetings",
         ]
         self._blocked_terms = [
             "poem",

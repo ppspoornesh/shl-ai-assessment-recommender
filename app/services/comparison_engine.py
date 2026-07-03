@@ -8,7 +8,10 @@ from app.models.catalog import CatalogEntry
 
 
 class ComparisonResult(BaseModel):
-    """Structured metadata comparison for a set of catalog assessments."""
+    """Structured metadata comparison for a set of catalog assessments.
+
+    Includes recruiter-friendly insights (use cases, tradeoffs, guidance).
+    """
 
     model_config = ConfigDict(extra="ignore")
 
@@ -21,13 +24,14 @@ class ComparisonResult(BaseModel):
     adaptive_support: list[str] = Field(default_factory=list)
     remote_support: list[str] = Field(default_factory=list)
 
+    # Recruiter extensions
+    use_cases: list[str] = Field(default_factory=list)
+    tradeoffs: list[str] = Field(default_factory=list)
+    recommendation_guidance: str | None = None
+
 
 class ComparisonEngine:
-    """Compares catalog assessments using only structured metadata.
-
-    This component is intentionally limited to analysis of existing catalog entries.
-    It does not retrieve, rank, or generate conversational content.
-    """
+    """Compares catalog assessments using only structured metadata."""
 
     def compare(self, assessments: list[CatalogEntry]) -> ComparisonResult:
         if len(assessments) < 2:
@@ -35,6 +39,39 @@ class ComparisonEngine:
 
         common_features = self._common_features(assessments)
         differences = self._differences(assessments)
+
+        # Compute use cases and tradeoffs
+        use_cases = []
+        tradeoffs = []
+
+        for assessment in assessments:
+            keys_lower = [k.lower() for k in assessment.keys]
+            name_lower = assessment.name.lower()
+            description_lower = (assessment.description or "").lower()
+
+            if "simulation" in keys_lower or "simulations" in keys_lower or "automata" in name_lower:
+                use_cases.append(f"{assessment.name}: Best for hands-on programming and practical coding troubleshooting.")
+                tradeoffs.append(f"{assessment.name}: Offers high fidelity and realistic skill measurement, but has a higher candidate completion effort.")
+            elif "verify" in name_lower or any(k in name_lower for k in ["numerical", "deductive", "inductive", "ability"]):
+                use_cases.append(f"{assessment.name}: Best for high-volume screening to verify cognitive aptitude and reasoning speed.")
+                tradeoffs.append(f"{assessment.name}: Highly predictive of general performance, but does not evaluate specific technical framework skills.")
+            elif "opq" in name_lower or "personality" in name_lower or "behavior" in name_lower:
+                use_cases.append(f"{assessment.name}: Best for evaluating working styles, collaboration, and culture fit within the team.")
+                tradeoffs.append(f"{assessment.name}: Provides deep behavioral insights, but relies on self-reported questionnaire format.")
+            elif any("executive" in lvl.lower() or "manager" in lvl.lower() for lvl in assessment.job_levels):
+                use_cases.append(f"{assessment.name}: Best for leadership, strategic execution, and management capability validation.")
+                tradeoffs.append(f"{assessment.name}: Highly tailored to senior decision-making contexts, but less applicable to individual contributor screening.")
+            else:
+                use_cases.append(f"{assessment.name}: Best for standardized domain knowledge verification and technical screening.")
+                tradeoffs.append(f"{assessment.name}: Short and objective format, but does not capture practical hands-on application.")
+
+        # Compute recommendation guidance
+        names = [a.name for a in assessments]
+        guidance = (
+            f"Choose {names[0]} if you want to prioritize direct evaluation of specific competencies or programming knowledge. "
+            f"Opt for {names[1]} if you are seeking a broader or alternative skill verification format. "
+            f"For critical hires, we recommend combining them into a unified battery (using one for technical screening and the other for behavioral or general ability fit)."
+        )
 
         return ComparisonResult(
             common_features=common_features,
@@ -45,6 +82,9 @@ class ComparisonEngine:
             languages=[self._extract_languages(assessment) for assessment in assessments],
             adaptive_support=[self._extract_field(assessment, "adaptive") for assessment in assessments],
             remote_support=[self._extract_field(assessment, "remote") for assessment in assessments],
+            use_cases=use_cases,
+            tradeoffs=tradeoffs,
+            recommendation_guidance=guidance,
         )
 
     def _common_features(self, assessments: list[CatalogEntry]) -> list[str]:

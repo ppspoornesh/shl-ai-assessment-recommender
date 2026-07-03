@@ -20,6 +20,17 @@ class HiringRequirements(BaseModel):
     remote: bool | None = None
     additional_constraints: list[str] = Field(default_factory=list)
 
+    # Extended fields
+    department: str | None = None
+    soft_skills: list[str] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
+    accent: str | None = None
+    location: str | None = None
+    hybrid: bool | None = None
+    onsite: bool | None = None
+    assessment_purpose: str | None = None
+    assessment_battery: bool = False
+
     def merge(self, other: HiringRequirements) -> HiringRequirements:
         """Return a new requirements object by merging another into this one."""
         merged = self.model_copy(deep=True)
@@ -47,6 +58,31 @@ class HiringRequirements(BaseModel):
 
         if other.remote is not None:
             merged.remote = other.remote
+
+        # Merge extended fields
+        if other.department:
+            merged.department = other.department
+
+        merged.soft_skills = self._merge_unique(merged.soft_skills, other.soft_skills)
+        merged.certifications = self._merge_unique(merged.certifications, other.certifications)
+
+        if other.accent:
+            merged.accent = other.accent
+
+        if other.location:
+            merged.location = other.location
+
+        if other.hybrid is not None:
+            merged.hybrid = other.hybrid
+
+        if other.onsite is not None:
+            merged.onsite = other.onsite
+
+        if other.assessment_purpose:
+            merged.assessment_purpose = other.assessment_purpose
+
+        # Or battery if either is True
+        merged.assessment_battery = self.assessment_battery or other.assessment_battery
 
         return merged
 

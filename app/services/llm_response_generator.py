@@ -9,11 +9,7 @@ from app.services.comparison_engine import ComparisonResult
 
 
 class LLMResponseGenerator:
-    """Builds a natural-language reply from structured inputs using prompt templates.
-
-    This component is intentionally limited to prompt assembly and LLM invocation.
-    It never retrieves, ranks, compares, or accesses the catalog directly.
-    """
+    """Builds a natural-language reply from structured inputs using prompt templates."""
 
     def __init__(self, provider: BaseLLMProvider | None = None, prompts_dir: str | None = None) -> None:
         self._provider = provider or ProviderFactory.create_provider()
@@ -84,7 +80,14 @@ class LLMResponseGenerator:
     def _serialize_comparison(self, comparison_result: ComparisonResult | None) -> str:
         if comparison_result is None:
             return "None"
-        return (
-            f"common_features={', '.join(comparison_result.common_features) or 'none'}; "
+        parts = [
+            f"common_features={', '.join(comparison_result.common_features) or 'none'}",
             f"differences={', '.join(comparison_result.differences) or 'none'}"
-        )
+        ]
+        if comparison_result.use_cases:
+            parts.append(f"use_cases={'; '.join(comparison_result.use_cases)}")
+        if comparison_result.tradeoffs:
+            parts.append(f"tradeoffs={'; '.join(comparison_result.tradeoffs)}")
+        if comparison_result.recommendation_guidance:
+            parts.append(f"guidance={comparison_result.recommendation_guidance}")
+        return "; ".join(parts)

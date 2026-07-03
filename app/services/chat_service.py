@@ -67,6 +67,10 @@ class ChatService:
             return self._format(reply=reply, recommendations=[])
 
         intent = self.intent_detector.detect_intent(request.conversation)
+        if intent == "greeting":
+            reply = self._build_reply(intent=intent, recommendations=[])
+            return self._format(reply=reply, recommendations=[])
+
         extraction_result = self.requirement_extractor.parse_conversation(request.conversation)
         completeness_result = self.completeness_checker.check(extraction_result.requirements)
 
@@ -81,7 +85,7 @@ class ChatService:
 
         candidates = self.candidate_retriever.retrieve(extraction_result.requirements)
         ranked_candidates = self.ranking_engine.rank(candidates, extraction_result.requirements)
-        recommendations = self.recommendation_engine.build_recommendations(ranked_candidates)
+        recommendations = self.recommendation_engine.build_recommendations(ranked_candidates, extraction_result.requirements)
         comparison_result = self._compare_ranked_candidates(candidates, ranked_candidates) if intent == "compare_options" else None
         reply = self._build_reply(
             intent=intent,

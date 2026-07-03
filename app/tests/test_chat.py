@@ -120,3 +120,68 @@ def test_chat_service_handles_comparison_intent_with_ranked_recommendations() ->
 
     assert len(response.recommendations) == 2
     assert "comparison" in response.reply.lower()
+
+
+def test_chat_service_greeting_intent() -> None:
+    service = make_chat_service()
+    request = ChatRequest(conversation=[Message(role="user", content="Hi, hello there!")])
+    response = asyncio.run(service.handle_chat(request))
+    assert response.recommendations == []
+    assert "SHL assessment advisor" in response.reply
+
+
+def test_chat_service_battery_request() -> None:
+    entries = [
+        make_entry("1", "Senior Python Engineer", skills=["python"], job_levels=["Senior"]),
+        make_entry("2", "SHL Verify Interactive G+", skills=["cognitive"], job_levels=["Senior"]),
+        make_entry("3", "Occupational Personality Questionnaire OPQ32r", skills=["personality"], job_levels=["Senior"]),
+    ]
+    retriever = CandidateRetriever(StubCatalogLoader(entries))
+    service = ChatService(candidate_retriever=retriever)
+    request = ChatRequest(
+        conversation=[
+            Message(role="user", content="I want a full hiring battery for a senior python developer."),
+        ]
+    )
+    response = asyncio.run(service.handle_chat(request))
+    assert len(response.recommendations) == 3
+    # Check that it categorized components correctly
+    explanations = [rec.explanation for rec in response.recommendations]
+    assert any("Cognitive Component" in exp for exp in explanations)
+    assert any("Behavioral Component" in exp for exp in explanations)
+    assert any("Role-Specific Component" in exp for exp in explanations)
+
+
+def test_chat_service_fallback_reasoning() -> None:
+    entries = [
+        make_entry("1", "Linux Programming (General)", skills=["linux"], job_levels=["Senior"]),
+        make_entry("2", "Smart Interview Live Coding", skills=["coding"], job_levels=["Senior"]),
+        make_entry("3", "C++ Programming (New)", skills=["c++"], job_levels=["Senior"]),
+    ]
+    retriever = CandidateRetriever(StubCatalogLoader(entries))
+    service = ChatService(candidate_retriever=retriever)
+    request = ChatRequest(
+        conversation=[
+            Message(role="user", content="Recommend assessments for a Senior Rust Engineer."),
+        ]
+    )
+    response = asyncio.run(service.handle_chat(request))
+    assert len(response.recommendations) == 3
+    # Check fallback reasons are in explanations
+    assert "No direct Rust assessment exists" in response.recommendations[0].explanation
+    assert "no direct assessment exists in the shl catalog" in response.reply.lower()
+
+
+def test_chat_service_prioritized_clarification_languages() -> None:
+    service = make_chat_service()
+    request = ChatRequest(
+        conversation=[
+            Message(role="user", content="Assessments for a senior call center agent."),
+        ]
+    )
+    # Since call center is communication role, preferred_languages becomes mandatory
+    response = asyncio.run(service.handle_chat(request))
+    assert response.recommendations == []
+    # Assert it asks for preferred language
+    assert response.reply == "What preferred language should the assessment be administered in?"
+
